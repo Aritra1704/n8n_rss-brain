@@ -1,0 +1,91 @@
+# =============================================================
+# rss-brain Docker Compose Stack
+#
+# Service overview:
+# - postgres: Primary relational database for n8n and digest data.
+#   It initializes schema from ./database/init.sql on first startup
+#   and keeps data in a named volume for persistence.
+# - n8n: Workflow engine that reads RSS feeds, runs automations,
+#   calls OpenAI for summarization, and writes results to PostgreSQL.
+# - ui: Lightweight dashboard served by Nginx from ./ui/public so
+#   digest output and workflow status can be viewed in the browser.
+# =============================================================
+
+services:
+  postgres:
+    image: postgres:15 # PostgreSQL 15 image
+    container_name: rss-brain-postgres # Stable container name for local dev
+    restart: always # Always restart unless explicitly stopped
+    env_file:
+      - .env # Load environment values from project .env file
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB} # Database name to create/use
+      POSTGRES_USER: ${POSTGRES_USER} # Database user with access permissions
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} # Password for the database user
+    volumes:
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql # Auto-runs schema on first database initialization
+      - postgres_data:/var/lib/postgresql/data # Persistent database storage
+    ports:
+      - "5432:5432" # Expose PostgreSQL on default port
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"] # Marks service healthy when DB accepts connections
+      interval: 10s # Run health check every 10 seconds
+      timeout: 5s # Fail a single check if it takes longer than 5 seconds
+      retries: 5 # Require 5 consecutive failures before unhealthy
+      start_period: 10s # Grace period before health checks count as failures
+    networks:
+      - rss-brain-network # Attach service to project bridge network
+
+  n8n:
+    image: n8nio/n8n:latest # Official n8n image
+    container_name: rss-brain-n8n # Stable container name for automation service
+    restart: always # Keep n8n available after crashes/reboots
+    depends_on:
+      postgres:
+        condition: service_healthy # Start only after PostgreSQL reports healthy
+    env_file:
+      - .env # Load all variables from .env file
+    environment:
+      N8N_BASIC_AUTH_ACTIVE: ${N8N_BASIC_AUTH_ACTIVE} # Enable/disable n8n basic auth
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER} # n8n login username
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD} # n8n login password
+      N8N_HOST: ${N8N_HOST} # n8n host value used for internal/external URLs
+      N8N_PORT: ${N8N_PORT} # n8n port value
+      N8N_PROTOCOL: ${N8N_PROTOCOL} # n8n protocol (http/https)
+      DB_TYPE: ${DB_TYPE} # Database driver type (postgresdb)
+      DB_POSTGRESDB_HOST: ${DB_POSTGRESDB_HOST} # PostgreSQL host for n8n
+      DB_POSTGRESDB_PORT: ${DB_POSTGRESDB_PORT} # PostgreSQL port for n8n
+      DB_POSTGRESDB_DATABASE: ${DB_POSTGRESDB_DATABASE} # PostgreSQL database for n8n
+      DB_POSTGRESDB_USER: ${DB_POSTGRESDB_USER} # PostgreSQL username for n8n
+      DB_POSTGRESDB_PASSWORD: ${DB_POSTGRESDB_PASSWORD} # PostgreSQL password for n8n
+      N8N_RUNNERS_ENABLED: "true" # Enables task runners in n8n runtime
+      EXECUTIONS_PROCESS: main # Run workflow executions in main process
+      N8N_DIAGNOSTICS_ENABLED: "false" # Disable telemetry diagnostics
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false" # Disable version notification checks
+    ports:
+      - "5678:5678" # Expose n8n editor/API port
+    volumes:
+      - n8n_data:/home/node/.n8n # Persist n8n credentials, settings, and state
+      - ./workflows:/home/node/workflows # Mount workflow exports/imports directory
+    networks:
+      - rss-brain-network # Attach service to project bridge network
+
+  ui:
+    image: nginx:alpine # Minimal Nginx image for static UI hosting
+    container_name: rss-brain-ui # Stable container name for dashboard UI
+    depends_on:
+      - n8n # Start UI after n8n container is created
+    ports:
+      - "3000:80" # Serve dashboard at http://localhost:3000
+    volumes:
+      - ./ui/public:/usr/share/nginx/html:ro # Serve static files as read-only
+    networks:
+      - rss-brain-network # Attach service to project bridge network
+
+networks:
+  rss-brain-network:
+    driver: bridge # Isolated bridge network for inter-service communication
+
+volumes:
+  postgres_data: # Named volume for PostgreSQL persistence
+  n8n_data: # Named volume for n8n persistence
