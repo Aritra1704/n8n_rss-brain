@@ -26,3 +26,15 @@ build/
 # OS-generated files
 .DS_Store
 Thumbs.db
+
+# Auto-generated lock file — Docker and Railway generate their own
+package-lock.json
+
+# ─────────────────────────────
+# Backup & temp files
+# ─────────────────────────────
+*.backup
+*.dir_backup
+*.bak
+*.tmp
+*.orig
