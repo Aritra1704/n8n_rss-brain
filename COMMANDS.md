@@ -50,13 +50,13 @@ docker compose logs --tail=100
 docker compose exec postgres sh
 
 # Open an interactive psql session against the configured rss-brain database.
-docker compose exec postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+docker compose exec postgres psql -U "$DB_POSTGRESDB_USER" -d "$DB_POSTGRESDB_DATABASE"
 
 # Run a quick SQL health check and exit (useful in scripts/CI checks).
-docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT NOW();"
+docker compose exec -T postgres psql -U "$DB_POSTGRESDB_USER" -d "$DB_POSTGRESDB_DATABASE" -c "SELECT NOW();"
 
 # Re-run the local schema file manually against the database when needed.
-docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < database/init.sql
+docker compose exec -T postgres psql -U "$DB_POSTGRESDB_USER" -d "$DB_POSTGRESDB_DATABASE" < database/init.sql
 ```
 
 ## 4. n8n - Workflow Import/Export via CLI

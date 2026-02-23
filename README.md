@@ -86,7 +86,7 @@ rss-brain/
    ```
 5. (Optional) Initialize the database schema manually.
    ```bash
-   docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < database/init.sql
+   docker compose exec -T postgres psql -U "$DB_POSTGRESDB_USER" -d "$DB_POSTGRESDB_DATABASE" < database/init.sql
    ```
 6. Access local services.
    ```bash
@@ -111,11 +111,11 @@ Use `.env.example` as the source of truth, then copy values into `.env`.
 | --- | --- | --- | --- |
 | `OPENAI_API_KEY` | Yes | `sk-...` | API key used for AI summarization |
 | `OPENAI_MODEL` | No | `gpt-4o-mini` | Model used by summary step |
-| `POSTGRES_HOST` | Yes | `postgres` | PostgreSQL host/service name |
-| `POSTGRES_PORT` | Yes | `5432` | PostgreSQL port |
-| `POSTGRES_DB` | Yes | `rss_brain` | Database name |
-| `POSTGRES_USER` | Yes | `rss_user` | Database user |
-| `POSTGRES_PASSWORD` | Yes | `change-me` | Database password |
+| `DB_POSTGRESDB_HOST` | Yes | `rss-brain-postgres` | PostgreSQL host/service name |
+| `DB_POSTGRESDB_PORT` | Yes | `5432` | PostgreSQL port |
+| `DB_POSTGRESDB_DATABASE` | Yes | `rss_brain` | Database name |
+| `DB_POSTGRESDB_USER` | Yes | `rss_user` | Database user |
+| `DB_POSTGRESDB_PASSWORD` | Yes | `change-me` | Database password |
 | `N8N_HOST` | No | `localhost` | n8n host binding |
 | `N8N_PORT` | No | `5678` | n8n web UI/API port |
 | `N8N_BASIC_AUTH_USER` | No | `admin` | n8n basic auth username |

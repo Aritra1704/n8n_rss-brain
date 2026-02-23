@@ -21,9 +21,9 @@ services:
     env_file:
       - .env # Load environment values from project .env file
     environment:
-      POSTGRES_DB: ${POSTGRES_DB} # Database name to create/use
-      POSTGRES_USER: ${POSTGRES_USER} # Database user with access permissions
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} # Password for the database user
+      POSTGRES_DB: ${DB_POSTGRESDB_DATABASE} # Database name to create/use (sourced from DB_* vars)
+      POSTGRES_USER: ${DB_POSTGRESDB_USER} # Database user with access permissions (sourced from DB_* vars)
+      POSTGRES_PASSWORD: ${DB_POSTGRESDB_PASSWORD} # Password for DB user (sourced from DB_* vars)
     volumes:
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql # Auto-runs schema on first database initialization
       - postgres_data:/var/lib/postgresql/data # Persistent database storage
