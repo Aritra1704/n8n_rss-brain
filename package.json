@@ -1,0 +1,18 @@
+{
+  "name": "rss-brain",
+  "version": "1.0.0",
+  "description": "AI-powered RSS digest engine built on n8n. This package.json is primarily for the migration runner, not a full web app.",
+  "private": true,
+  "scripts": {
+    "migrate": "node database/migrate.js",
+    "migrate:status": "node database/migrate-status.js",
+    "start": "node database/migrate.js && echo Migration complete"
+  },
+  "dependencies": {
+    "pg": "^8.11.0",
+    "dotenv": "^16.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

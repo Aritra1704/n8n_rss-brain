@@ -5,6 +5,8 @@
 # - postgres: Primary relational database for n8n and digest data.
 #   It initializes schema from ./database/init.sql on first startup
 #   and keeps data in a named volume for persistence.
+# - migrator: One-shot Node.js job that installs deps and runs SQL migrations
+#   before application services boot.
 # - n8n: Workflow engine that reads RSS feeds, runs automations,
 #   calls OpenAI for summarization, and writes results to PostgreSQL.
 # - ui: Lightweight dashboard served by Nginx from ./ui/public so
@@ -36,13 +38,34 @@ services:
     networks:
       - rss-brain-network # Attach service to project bridge network
 
+  migrator:
+    image: node:18-alpine # Lightweight Node.js runtime for migration scripts
+    container_name: rss-brain-migrator # Stable container name for migration runner
+    working_dir: /app # Run commands from mounted project root
+    volumes:
+      - .:/app # Mount entire project so migration files/scripts are available
+    command: sh -c "npm install && node database/migrate.js" # Install deps and run migrations
+    env_file:
+      - .env # Load DB connection variables for migration runner
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # Host gateway alias for local/dev compatibility
+    restart: "no" # Run once and exit; do not restart as a long-lived service
+    depends_on:
+      postgres:
+        condition: service_healthy # Ensure DB is ready before running migrations
+    networks:
+      - rss-brain-network # Attach service to project bridge network
+
   n8n:
     image: n8nio/n8n:latest # Official n8n image
     container_name: rss-brain-n8n # Stable container name for automation service
     restart: always # Keep n8n available after crashes/reboots
+    # Startup order: migrator -> (success) -> n8n starts
     depends_on:
       postgres:
         condition: service_healthy # Start only after PostgreSQL reports healthy
+      migrator:
+        condition: service_completed_successfully # Start only after migrations complete successfully
     env_file:
       - .env # Load all variables from .env file
     environment:
@@ -73,6 +96,7 @@ services:
   ui:
     image: nginx:alpine # Minimal Nginx image for static UI hosting
     container_name: rss-brain-ui # Stable container name for dashboard UI
+    # Startup order continuation: migrator -> (success) -> n8n starts -> ui starts
     depends_on:
       - n8n # Start UI after n8n container is created
     ports:
