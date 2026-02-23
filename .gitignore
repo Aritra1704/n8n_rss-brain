@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# n8n local data
+.n8n/
+
+# Docker/local volume data (common folder names)
+docker-data/
+docker-volumes/
+volumes/
+postgres-data/
+pgdata/
+
+# Build artifacts
+dist/
+build/
+
+# Logs
+*.log
+
+# OS-generated files
+.DS_Store
+Thumbs.db
