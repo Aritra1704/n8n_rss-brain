@@ -1,0 +1,351 @@
+{
+  "name": "RSS Brain Digest",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        192
+      ],
+      "id": "d629114a-d539-489c-b958-3d20aa231e23",
+      "name": "Schedule 9AM"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, name, url, category \nFROM rss_brain.rss_sources \nWHERE is_active = true\nORDER BY id;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        224,
+        192
+      ],
+      "id": "43d89a8f-465c-4850-8237-f4b82b9319ef",
+      "name": "Get Active Feeds",
+      "credentials": {
+        "postgres": {
+          "id": "mmWkPkKk4HRGa3pt",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        448,
+        192
+      ],
+      "id": "7f2cb43b-0e70-45b2-a7aa-13f8936b0966",
+      "name": "Loop Feeds"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "9812e5f5-2d47-464e-bac0-c2a70288035a",
+      "name": "Fetch RSS Articles"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO rss_brain.rss_articles\n  (source_id, title, url, description, author, published_at)\nVALUES (\n  {{ $('Loop Feeds').first().json.id }},\n  '{{ $('Fetch RSS Articles').first().json.title.replace(/'/g, \"''\") }}',\n  '{{ $('Fetch RSS Articles').first().json.link }}',\n  '{{ $('Fetch RSS Articles').first().json.contentSnippet?.replace(/'/g, \"''\") ?? '' }}',\n  '{{ $('Fetch RSS Articles').first().json.creator ?? '' }}',\n  NOW()\n)\nON CONFLICT (url) DO NOTHING\nRETURNING id, title;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1120,
+        0
+      ],
+      "id": "1a9ff4f3-5d63-4b42-81c2-d706bcb8f456",
+      "name": "Save Article",
+      "credentials": {
+        "postgres": {
+          "id": "mmWkPkKk4HRGa3pt",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://host.docker.internal:11434/api/chat",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama3.1:8b\",\n  \"stream\": false,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a news analyst. When given an article, respond ONLY with a valid JSON object. No explanation, no markdown, no code blocks. Just raw JSON.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Summarize this article:\\n\\nTitle: {{ $('Fetch RSS Articles').item.json.title }}\\nDescription: {{ $('Fetch RSS Articles').item.json.contentSnippet ?? 'No description' }}\\n\\nRespond with this exact JSON structure:\\n{\\\"summary\\\": \\\"your 2-3 sentence summary here\\\", \\\"key_points\\\": [\\\"point1\\\", \\\"point2\\\", \\\"point3\\\"], \\\"sentiment\\\": \\\"positive\\\", \\\"relevance_score\\\": 0.8, \\\"tags\\\": [\\\"tag1\\\", \\\"tag2\\\"]}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1344,
+        0
+      ],
+      "id": "592a9d47-3494-4283-a7f5-84619d7dd6e8",
+      "name": "AI Summarize (Ollama)",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  '{{ $json.link }}' as url,\n  '{{ $json.title?.replace(/'/g, \"''\") }}' as title,\n  '{{ $json.contentSnippet?.replace(/'/g, \"''\") ?? '' }}' as description,\n  '{{ $json.creator ?? '' }}' as author,\n  {{ $('Loop Feeds').item.json.id }} as source_id\nWHERE NOT EXISTS (\n  SELECT 1 FROM rss_brain.rss_articles \n  WHERE url = '{{ $json.link }}'\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        896,
+        0
+      ],
+      "id": "9cb4e910-26e3-4969-95d7-f6ce7219d256",
+      "name": "Filter New Articles",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "mmWkPkKk4HRGa3pt",
+          "name": "Postgres account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = [];\n\nfor (const item of $input.all()) {\n  try {\n    // Get the content string from Ollama's chat response\n    let content = item.json.message?.content ?? '';\n    \n    // Strip markdown code blocks if present (```json ... ```)\n    content = content.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n    \n    // Parse the JSON\n    const parsed = JSON.parse(content);\n    \n    items.push({\n      json: {\n        article_id: item.json.article_id,  // pass through from previous nodes\n        summary: parsed.summary ?? '',\n        key_points: parsed.key_points ?? [],\n        sentiment: parsed.sentiment ?? 'neutral',\n        relevance_score: parsed.relevance_score ?? 0.5,\n        tags: parsed.tags ?? [],\n        raw_response: content\n      }\n    });\n  } catch (e) {\n    // If parsing fails, still pass something through\n    items.push({\n      json: {\n        article_id: item.json.article_id,\n        summary: item.json.message?.content ?? 'Parse failed',\n        key_points: [],\n        sentiment: 'neutral',\n        relevance_score: 0.5,\n        tags: [],\n        raw_response: item.json.message?.content ?? ''\n      }\n    });\n  }\n}\n\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        0
+      ],
+      "id": "71fdc08a-4c88-4dce-8fec-45fa8e06e570",
+      "name": "Parse AI Response"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO rss_brain.article_summaries \n  (article_id, summary, key_points, sentiment, relevance_score, tags)\nSELECT \n  a.id,\n  '{{ $json.summary.replace(/'/g, \"''\") }}',\n  ARRAY[{{ $json.key_points.map(p => `'${p.replace(/'/g, \"''\")}'`).join(', ') }}]::text[],\n  '{{ $json.sentiment }}',\n  {{ $json.relevance_score }},\n  ARRAY[{{ $json.tags.map(t => `'${t.replace(/'/g, \"''\")}'`).join(', ') }}]::text[]\nFROM rss_brain.rss_articles a\nWHERE a.url = '{{ $('Fetch RSS Articles').item.json.link }}'\nON CONFLICT (article_id) DO UPDATE SET\n  summary = EXCLUDED.summary,\n  key_points = EXCLUDED.key_points,\n  sentiment = EXCLUDED.sentiment,\n  relevance_score = EXCLUDED.relevance_score,\n  tags = EXCLUDED.tags;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1792,
+        0
+      ],
+      "id": "2fa18b7c-84f8-4bbe-b47a-be2350feb825",
+      "name": "Save Summary",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "mmWkPkKk4HRGa3pt",
+          "name": "Postgres account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE rss_brain.rss_articles \nSET is_processed = true\nWHERE url = '{{ $('Fetch RSS Articles').first().json.link }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2016,
+        176
+      ],
+      "id": "e0f249ee-6980-440c-94c6-b5238ae3e5b6",
+      "name": "Mark Processed",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "mmWkPkKk4HRGa3pt",
+          "name": "Postgres account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO rss_brain.digest_runs \n  (status, articles_fetched, articles_summarized, notes)\nVALUES (\n  'success',\n  (SELECT COUNT(*) FROM rss_brain.rss_articles),\n  (SELECT COUNT(*) FROM rss_brain.article_summaries),\n  'Digest completed successfully'\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        672,
+        192
+      ],
+      "id": "19220b55-fd02-4546-bc4f-7ea3e93969e4",
+      "name": "Save Digest Run",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "mmWkPkKk4HRGa3pt",
+          "name": "Postgres account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule 9AM": {
+      "main": [
+        [
+          {
+            "node": "Get Active Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Feeds": {
+      "main": [
+        [
+          {
+            "node": "Loop Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Feeds": {
+      "main": [
+        [
+          {
+            "node": "Save Digest Run",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch RSS Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch RSS Articles": {
+      "main": [
+        [
+          {
+            "node": "Filter New Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Article": {
+      "main": [
+        [
+          {
+            "node": "AI Summarize (Ollama)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter New Articles": {
+      "main": [
+        [
+          {
+            "node": "Save Article",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Summarize (Ollama)": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Response": {
+      "main": [
+        [
+          {
+            "node": "Save Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Summary": {
+      "main": [
+        [
+          {
+            "node": "Mark Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Processed": {
+      "main": [
+        [
+          {
+            "node": "Loop Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "954a9d94-e2e0-43ef-affb-cdc77fc04db7",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "12931fa82598a71f4f9d1013989428b5e1a98807a8453f8396453cecd58e4bb3"
+  },
+  "id": "P9ihH7Nj2wUVXUCA",
+  "tags": []
+}
