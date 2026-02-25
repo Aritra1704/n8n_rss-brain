@@ -1,179 +1,628 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>rss-brain Dashboard</title>
-    <style>
-      :root {
-        --bg: #0f172a;
-        --card: #16213a;
-        --card-border: #1f2d4d;
-        --text: #e2e8f0;
-        --muted: #94a3b8;
-        --accent: #6366f1;
-        --accent-soft: rgba(99, 102, 241, 0.18);
-      }
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RSS Brain — Daily Digest</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --border: #1e1e1e;
+      --border-light: #2a2a2a;
+      --text: #e8e0d0;
+      --text-dim: #6b6560;
+      --text-mid: #9d9590;
+      --accent: #c9a96e;
+      --accent-dim: #7a5f35;
+      --positive: #6b9e7a;
+      --negative: #c4635a;
+      --neutral: #6b7fa0;
+      --tag-bg: #1a1a1a;
+    }
 
-      * {
-        box-sizing: border-box;
-      }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
-      body {
-        margin: 0;
-        min-height: 100vh;
-        display: grid;
-        place-items: center;
-        background: radial-gradient(circle at top, #172554 0%, var(--bg) 45%);
-        color: var(--text);
-        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-      }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-weight: 300;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
 
-      .shell {
-        width: min(92vw, 760px);
-        padding: 24px 16px;
-      }
+    /* Grain overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.4;
+    }
 
-      .card {
-        background: linear-gradient(160deg, rgba(22, 33, 58, 0.95), rgba(15, 23, 42, 0.95));
-        border: 1px solid var(--card-border);
-        border-radius: 16px;
-        padding: 28px;
-        text-align: center;
-        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-      }
+    /* Header */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 0 2.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+      position: sticky;
+      top: 0;
+      background: rgba(10,10,10,0.95);
+      backdrop-filter: blur(12px);
+      z-index: 100;
+    }
 
-      .logo {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        padding: 8px 14px;
-        border-radius: 999px;
-        background: var(--accent-soft);
-        border: 1px solid rgba(99, 102, 241, 0.45);
-        color: #c7d2fe;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-      }
+    .logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.4rem;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
 
-      .logo .brain {
-        font-size: 1.15rem;
-      }
+    .logo span {
+      color: var(--accent);
+      font-style: italic;
+    }
 
-      h1 {
-        margin: 18px 0 10px;
-        font-size: clamp(1.4rem, 3vw, 2rem);
-      }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
 
-      .message {
-        margin: 0 auto 22px;
-        max-width: 56ch;
-        color: var(--muted);
-        line-height: 1.6;
-      }
+    .last-run {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+    }
 
-      .status-grid {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 10px;
-        margin-bottom: 22px;
-      }
+    .refresh-btn {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      background: none;
+      border: 1px solid var(--accent-dim);
+      padding: 0.4rem 0.9rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+    }
 
-      .pill {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 9px 14px;
-        border-radius: 999px;
-        border: 1px solid #2b3a60;
-        background: rgba(15, 23, 42, 0.75);
-        color: #dbeafe;
-        font-size: 0.93rem;
-        text-decoration: none;
-      }
+    .refresh-btn:hover {
+      background: var(--accent);
+      color: var(--bg);
+    }
 
-      .pill-link {
-        border-color: rgba(99, 102, 241, 0.55);
-        background: rgba(99, 102, 241, 0.2);
-      }
+    /* Stats bar */
+    .stats-bar {
+      border-bottom: 1px solid var(--border);
+      padding: 0 2.5rem;
+      display: flex;
+      gap: 0;
+      overflow-x: auto;
+    }
 
-      .pill-link:hover {
-        background: rgba(99, 102, 241, 0.32);
-      }
+    .stat {
+      padding: 1rem 2rem 1rem 0;
+      margin-right: 2rem;
+      border-right: 1px solid var(--border);
+      min-width: 120px;
+      animation: fadeIn 0.4s ease forwards;
+      opacity: 0;
+    }
 
-      .cta {
-        display: inline-block;
-        padding: 12px 18px;
-        border-radius: 10px;
-        border: 1px solid var(--accent);
-        background: var(--accent);
-        color: #eef2ff;
-        font-weight: 600;
-        text-decoration: none;
-        transition: transform 120ms ease, box-shadow 120ms ease;
-      }
+    .stat:last-child { border-right: none; }
 
-      .cta:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 12px 26px rgba(99, 102, 241, 0.35);
-      }
+    .stat-value {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.8rem;
+      color: var(--accent);
+      line-height: 1;
+    }
 
-      footer {
-        margin-top: 14px;
-        text-align: center;
-        color: #64748b;
-        font-size: 0.9rem;
-      }
+    .stat-label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-top: 0.3rem;
+    }
 
-      @media (max-width: 540px) {
-        .card {
-          padding: 22px 16px;
-          border-radius: 14px;
-        }
+    /* Layout */
+    .layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: calc(100vh - 113px);
+    }
 
-        .status-grid {
-          flex-direction: column;
-          align-items: stretch;
-        }
+    /* Sidebar */
+    aside {
+      border-right: 1px solid var(--border);
+      padding: 1.5rem 0;
+      position: sticky;
+      top: 64px;
+      height: calc(100vh - 113px);
+      overflow-y: auto;
+    }
 
-        .pill {
-          width: 100%;
-        }
+    .sidebar-section {
+      padding: 0 1.5rem;
+      margin-bottom: 2rem;
+    }
 
-        .cta {
-          width: 100%;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="shell">
-      <main class="card">
-        <div class="logo" aria-label="rss-brain logo">
-          <span class="brain">🧠</span>
-          <span>RSS</span>
-        </div>
-        <h1>Dashboard Loading...</h1>
-        <p class="message">
-          n8n workflow engine is starting up. Check back once your first digest runs.
-        </p>
+    .sidebar-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.6rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 0.75rem;
+    }
 
-        <section class="status-grid" aria-label="System status">
-          <a class="pill pill-link" href="http://localhost:5678" target="_blank" rel="noopener noreferrer">
-            n8n ✅ Running
-          </a>
-          <span class="pill">PostgreSQL ✅ Connected</span>
-          <span class="pill">AI Digest ⏳ Pending first run</span>
-        </section>
+    .filter-btn {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: none;
+      border: none;
+      padding: 0.5rem 0.75rem;
+      color: var(--text-mid);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 0.85rem;
+      cursor: pointer;
+      border-radius: 2px;
+      transition: all 0.15s;
+      margin-bottom: 2px;
+    }
 
-        <a class="cta" href="http://localhost:5678" target="_blank" rel="noopener noreferrer">
-          Open n8n Workflow Editor
-        </a>
-      </main>
+    .filter-btn:hover { background: var(--border); color: var(--text); }
+    .filter-btn.active { background: var(--border-light); color: var(--accent); }
 
-      <footer>rss-brain • Learning n8n Architecture</footer>
+    .filter-btn .count {
+      float: right;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--text-dim);
+    }
+
+    /* Sentiment dot */
+    .dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+    .dot.positive { background: var(--positive); }
+    .dot.negative { background: var(--negative); }
+    .dot.neutral { background: var(--neutral); }
+
+    /* Main content */
+    main {
+      padding: 2rem 2.5rem;
+    }
+
+    /* Search */
+    .search-bar {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .search-input {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 0.9rem;
+      padding: 0.65rem 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .search-input:focus { border-color: var(--accent-dim); }
+    .search-input::placeholder { color: var(--text-dim); }
+
+    .sort-select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-mid);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      padding: 0.65rem 1rem;
+      outline: none;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+    }
+
+    /* Section heading */
+    .section-heading {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* Article cards */
+    .articles-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .article-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 1.25rem 1.5rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      animation: slideUp 0.3s ease forwards;
+      opacity: 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .article-card::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--accent);
+      transform: scaleY(0);
+      transition: transform 0.2s;
+    }
+
+    .article-card:hover {
+      border-color: var(--border-light);
+      background: #141414;
+    }
+
+    .article-card:hover::before { transform: scaleY(1); }
+
+    .article-card.expanded {
+      border-color: var(--accent-dim);
+    }
+
+    .article-card.expanded::before { transform: scaleY(1); }
+
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .article-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1rem;
+      font-weight: 400;
+      line-height: 1.4;
+      color: var(--text);
+      flex: 1;
+    }
+
+    .article-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .source-badge {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      text-transform: uppercase;
+    }
+
+    .article-date {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--text-dim);
+    }
+
+    .sentiment-badge {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.6rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.15rem 0.5rem;
+      border-radius: 1px;
+    }
+
+    .sentiment-badge.positive { color: var(--positive); border: 1px solid var(--positive); }
+    .sentiment-badge.negative { color: var(--negative); border: 1px solid var(--negative); }
+    .sentiment-badge.neutral { color: var(--neutral); border: 1px solid var(--neutral); }
+
+    .relevance-bar {
+      width: 40px;
+      height: 2px;
+      background: var(--border);
+      position: relative;
+      flex-shrink: 0;
+      margin-top: 6px;
+    }
+
+    .relevance-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      background: var(--accent);
+    }
+
+    .article-summary {
+      font-size: 0.875rem;
+      line-height: 1.65;
+      color: var(--text-mid);
+    }
+
+    /* Expanded content */
+    .expanded-content {
+      display: none;
+      margin-top: 1.25rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--border);
+      animation: fadeIn 0.25s ease;
+    }
+
+    .article-card.expanded .expanded-content { display: block; }
+
+    .key-points-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 0.75rem;
+    }
+
+    .key-points {
+      list-style: none;
+      margin-bottom: 1.25rem;
+    }
+
+    .key-points li {
+      font-size: 0.85rem;
+      color: var(--text-mid);
+      line-height: 1.5;
+      padding: 0.35rem 0;
+      padding-left: 1rem;
+      border-left: 2px solid var(--border-light);
+      margin-bottom: 0.35rem;
+    }
+
+    .tags-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-bottom: 1rem;
+    }
+
+    .tag {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.06em;
+      color: var(--text-dim);
+      background: var(--tag-bg);
+      border: 1px solid var(--border);
+      padding: 0.2rem 0.6rem;
+    }
+
+    .read-more {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      text-decoration: none;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--accent-dim);
+      padding-bottom: 1px;
+      transition: border-color 0.2s;
+    }
+
+    .read-more:hover { border-color: var(--accent); }
+
+    /* Loading state */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 5rem 2rem;
+      gap: 1rem;
+    }
+
+    .loading-text {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.15em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .loading-bar {
+      width: 120px;
+      height: 1px;
+      background: var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .loading-bar::after {
+      content: '';
+      position: absolute;
+      left: -40%;
+      top: 0;
+      width: 40%;
+      height: 100%;
+      background: var(--accent);
+      animation: loading 1.2s ease-in-out infinite;
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 5rem 2rem;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+    }
+
+    .empty-state .big {
+      font-family: 'Playfair Display', serif;
+      font-size: 3rem;
+      color: var(--border-light);
+      display: block;
+      margin-bottom: 1rem;
+    }
+
+    /* Animations */
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+
+    @keyframes loading {
+      from { left: -40%; }
+      to { left: 100%; }
+    }
+
+    /* Digest runs panel */
+    .runs-list { }
+
+    .run-item {
+      padding: 0.5rem 0.75rem;
+      border-left: 2px solid var(--border);
+      margin-bottom: 0.5rem;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+
+    .run-item.success { border-color: var(--positive); }
+    .run-item .run-time { color: var(--text-mid); }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border-light); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">RSS <span>Brain</span></div>
+  <div class="header-right">
+    <span class="last-run" id="last-run-time">Loading...</span>
+    <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
+  </div>
+</header>
+
+<div class="stats-bar" id="stats-bar">
+  <div class="stat" style="animation-delay:0.1s">
+    <div class="stat-value" id="stat-articles">—</div>
+    <div class="stat-label">Articles</div>
+  </div>
+  <div class="stat" style="animation-delay:0.2s">
+    <div class="stat-value" id="stat-summaries">—</div>
+    <div class="stat-label">Summarized</div>
+  </div>
+  <div class="stat" style="animation-delay:0.3s">
+    <div class="stat-value" id="stat-sources">—</div>
+    <div class="stat-label">Sources</div>
+  </div>
+  <div class="stat" style="animation-delay:0.4s">
+    <div class="stat-value" id="stat-runs">—</div>
+    <div class="stat-label">Digest Runs</div>
+  </div>
+</div>
+
+<div class="layout">
+  <aside>
+    <div class="sidebar-section">
+      <div class="sidebar-title">Filter</div>
+      <button class="filter-btn active" onclick="filterBy('all', this)">
+        All Articles <span class="count" id="count-all">0</span>
+      </button>
+      <button class="filter-btn" onclick="filterBy('positive', this)">
+        <span class="dot positive"></span>Positive <span class="count" id="count-positive">0</span>
+      </button>
+      <button class="filter-btn" onclick="filterBy('negative', this)">
+        <span class="dot negative"></span>Negative <span class="count" id="count-negative">0</span>
+      </button>
+      <button class="filter-btn" onclick="filterBy('neutral', this)">
+        <span class="dot neutral"></span>Neutral <span class="count" id="count-neutral">0</span>
+      </button>
     </div>
-  </body>
-</html>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Sources</div>
+      <div id="source-filters"></div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Recent Runs</div>
+      <div class="runs-list" id="runs-list">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--text-dim)">Loading...</div>
+      </div>
+    </div>
+  </aside>
+
+  <main>
+    <div class="search-bar">
+      <input class="search-input" type="text" placeholder="Search articles, summaries, tags..." id="search-input" oninput="renderArticles()">
+      <select class="sort-select" id="sort-select" onchange="renderArticles()">
+        <option value="newest">Newest first</option>
+        <option value="relevance">By relevance</option>
+        <option value="sentiment">By sentiment</option>
+      </select>
+    </div>
+
+    <div class="section-heading" id="results-heading">Loading articles...</div>
+    <div id="articles-container">
+      <div class="loading">
+        <div class="loading-bar"></div>
+        <div class="loading-text">Fetching digest</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
